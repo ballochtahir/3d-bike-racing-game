@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Bike Racing</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      overflow: hidden;
+      background: #111;
+      font-family: Arial, sans-serif;
+      touch-action: none;
+    }
+
+    #game {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #score {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      z-index: 10;
+      color: white;
+      font-size: 22px;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px black;
+    }
+
+    .controls {
+      position: fixed;
+      bottom: 25px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 25px;
+      z-index: 20;
+    }
+
+    button {
+      width: 75px;
+      height: 75px;
+      border: 2px solid white;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      font-size: 30px;
+      font-weight: bold;
+    }
+
+    #start {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 30;
+      width: 180px;
+      height: 60px;
+      border-radius: 15px;
+      background: #2196f3;
+      font-size: 22px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="game"></div>
+
+<div id="score">Coins: 0</div>
+
+<button id="start">START GAME</button>
+
+<div class="controls">
+  <button id="left">◀</button>
+  <button id="right">▶</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+<script>
+
+const scene = new THREE.Scene();
+
+scene.background = new THREE.Color(0x87ceeb);
+
+const camera = new THREE.PerspectiveCamera(
+  70,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+
+camera.position.set(0, 4, 7);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: true
+});
+
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+
+document.getElementById("game").appendChild(renderer.domElement);
+
+
+// LIGHT
+
+const light = new THREE.DirectionalLight(0xffffff, 2);
+light.position.set(5, 10, 5);
+light.castShadow = true;
+scene.add(light);
+
+const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambient);
+
+
+// ROAD
+
+const roadGeometry = new THREE.BoxGeometry(10, 0.2, 200);
+const roadMaterial = new THREE.MeshStandardMaterial({
+  color: 0x333333
+});
+
+const road = new THREE.Mesh(
+  roadGeometry,
+  roadMaterial
+);
+
+road.position.y = -0.2;
+road.position.z = -80;
+
+scene.add(road);
+
+
+// ROAD LINES
+
+for (let i = 0; i < 40; i++) {
+
+  const lineGeometry = new THREE.BoxGeometry(0.15, 0.03, 3);
+
+  const lineMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff
+  });
+
+  const line = new THREE.Mesh(
+    lineGeometry,
+    lineMaterial
+  );
+
+  line.position.set(0, -0.05, -i * 5);
+
+  scene.add(line);
+}
+
+
+// BIKE
+
+const bike = new THREE.Group();
+
+
+// body
+
+const bodyGeometry = new THREE.BoxGeometry(0.8, 0.4, 1.8);
+
+const bodyMaterial = new THREE.MeshStandardMaterial({
+  color: 0xff0000
+});
+
+const body = new THREE.Mesh(
+  bodyGeometry,
+  bodyMaterial
+);
+
+body.position.y = 0.7;
+
+bike.add(body);
+
+
+// seat
+
+const seatGeometry = new THREE.BoxGeometry(0.55, 0.2, 0.7);
+
+const seatMaterial = new THREE.MeshStandardMaterial({
+  color: 0x111111
+});
+
+const seat = new THREE.Mesh(
+  seatGeometry,
+  seatMaterial
+);
+
+seat.position.set(0, 1, 0.2);
+
+bike.add(seat);
+
+
+// wheels
+
+function createWheel(z) {
+
+  const geometry = new THREE.CylinderGeometry(
+    0.45,
+    0.45,
+    0.25,
+    32
+  );
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x111111
+  });
+
+  const wheel = new THREE.Mesh(
+    geometry,
+    material
+  );
+
+  wheel.rotation.z = Math.PI / 2;
+
+  wheel.position.set(0, 0.45, z);
+
+  bike.add(wheel);
+}
+
+createWheel(-0.65);
+createWheel(0.65);
+
+
+// handle
+
+const handleGeometry = new THREE.BoxGeometry(
+  1.1,
+  0.12,
+  0.12
+);
+
+const handleMaterial = new THREE.MeshStandardMaterial({
+  color: 0x222222
+});
+
+const handle = new THREE.Mesh(
+  handleGeometry,
+  handleMaterial
+);
+
+handle.position.set(0, 1.25, -0.55);
+
+bike.add(handle);
+
+
+// bike position
+
+bike.position.set(0, 0, 3);
+
+scene.add(bike);
+
+
+// COINS
+
+let coins = [];
+
+function createCoin(z) {
+
+  const geometry = new THREE.TorusGeometry(
+    0.3,
+    0.08,
+    12,
+    24
+  );
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffd700,
+    emissive: 0x553300
+  });
+
+  const coin = new THREE.Mesh(
+    geometry,
+    material
+  );
+
+  coin.position.set(
+    (Math.random() * 6) - 3,
+    0.8,
+    z
+  );
+
+  coin.rotation.x = Math.PI / 2;
+
+  scene.add(coin);
+
+  coins.push(coin);
+}
+
+for (let i = 0; i < 25; i++) {
+  createCoin(-10 - i * 8);
+}
+
+
+// OBSTACLES
+
+let obstacles = [];
+
+function createObstacle(z) {
+
+  const geometry = new THREE.BoxGeometry(
+    1,
+    1,
+    1
+  );
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xff6600
+  });
+
+  const obstacle = new THREE.Mesh(
+    geometry,
+    material
+  );
+
+  obstacle.position.set(
+    (Math.random() * 6) - 3,
+    0.5,
+    z
+  );
+
+  scene.add(obstacle);
+
+  obstacles.push(obstacle);
+}
+
+for (let i = 0; i < 15; i++) {
+  createObstacle(-25 - i * 12);
+}
+
+
+// GAME
+
+let running = false;
+let score = 0;
+let speed = 0.35;
+
+function startGame() {
+
+  running = true;
+  score = 0;
+
+  document.getElementById("start").style.display = "none";
+}
+
+document
+  .getElementById("start")
+  .addEventListener("click", startGame);
+
+
+// CONTROLS
+
+let leftPressed = false;
+let rightPressed = false;
+
+function leftDown() {
+  leftPressed = true;
+}
+
+function leftUp() {
+  leftPressed = false;
+}
+
+function rightDown() {
+  rightPressed = true;
+}
+
+function rightUp() {
+  rightPressed = false;
+}
+
+document.getElementById("left")
+  .addEventListener("touchstart", leftDown);
+
+document.getElementById("left")
+  .addEventListener("touchend", leftUp);
+
+document.getElementById("right")
+  .addEventListener("touchstart", rightDown);
+
+document.getElementById("right")
+  .addEventListener("touchend", rightUp);
+
+
+// KEYBOARD
+
+document.addEventListener("keydown", function(e) {
+
+  if (e.key === "ArrowLeft") {
+    leftPressed = true;
+  }
+
+  if (e.key === "ArrowRight") {
+    rightPressed = true;
+  }
+
+});
+
+document.addEventListener("keyup", function(e) {
+
+  if (e.key === "ArrowLeft") {
+    leftPressed = false;
+  }
+
+  if (e.key === "ArrowRight") {
+    rightPressed = false;
+  }
+
+});
+
+
+// GAME LOOP
+
+function animate() {
+
+  requestAnimationFrame(animate);
+
+  if (running) {
+
+    // bike movement
+
+    if (leftPressed) {
+      bike.position.x -= 0.08;
+    }
+
+    if (rightPressed) {
+      bike.position.x += 0.08;
+    }
+
+    // limits
+
+    bike.position.x = Math.max(
+      -4,
+      Math.min(4, bike.position.x)
+    );
+
+
+    // road movement
+
+    road.position.z += speed;
+
+    if (road.position.z > 0) {
+      road.position.z = -80;
+    }
+
+
+    // lines
+
+    scene.children.forEach(function(obj) {
+
+      if (
+        obj.geometry &&
+        obj.geometry.type === "BoxGeometry" &&
+        obj !== road &&
+        obj !== body &&
+        obj !== seat &&
+        obj !== handle
+      ) {
+
+        if (obj.position.z < 6) {
+          obj.position.z += speed;
+        }
+
+        if (obj.position.z > 10) {
+          obj.position.z -= 200;
+        }
+
+      }
+
+    });
+
+
+    // coins
+
+    coins.forEach(function(coin) {
+
+      coin.rotation.y += 0.05;
+      coin.position.z += speed;
+
+      if (coin.position.z > 6) {
+        coin.position.z -= 200;
+      }
+
+      const distance = bike.position.distanceTo(
+        coin.position
+      );
+
+      if (distance < 0.9) {
+
+        score++;
+
+        document.getElementById("score").innerText =
+          "Coins: " + score;
+
+        coin.position.z -= 200;
+      }
+
+    });
+
+
+    // obstacles
+
+    obstacles.forEach(function(obstacle) {
+
+      obstacle.position.z += speed;
+
+      if (obstacle.position.z > 8) {
+        obstacle.position.z -= 180;
+      }
+
+      const dx =
+        Math.abs(
+          bike.position.x -
+          obstacle.position.x
+        );
+
+      const dz =
+        Math.abs(
+          bike.position.z -
+          obstacle.position.z
+        );
+
+      if (dx < 0.7 && dz < 1) {
+
+        running = false;
+
+        document.getElementById("start").style.display =
+          "block";
+
+        document.getElementById("start").innerText =
+          "GAME OVER";
+
+      }
+
+    });
+
+  }
+
+  camera.lookAt(bike.position);
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+
+// SCREEN RESIZE
+
+window.addEventListener("resize", function() {
+
+  camera.aspect =
+    window.innerWidth /
+    window.innerHeight;
+
+  camera.updateProjectionMatrix();
+
+  renderer.setSize(
+    window.innerWidth,
+    window.innerHeight
+  );
+
+});
+
+</script>
+
+</body>
+</html>
